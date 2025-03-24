@@ -1,25 +1,5 @@
 {
-  "name": "backend",
-  "version": "1.0.0",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
-    "bcrypt": "^5.1.1",
-    "bcryptjs": "^3.0.2",
-    "cookie": "^1.0.2",
-    "cookie-parser": "^1.4.7",
-    "dotenv": "^16.4.7",
-    "joi": "^17.13.3",
-    "pg": "^8.14.1"
-  },
-  "devDependencies": {
-    "eslint": "^9.22.0",
-    "globals": "^16.0.0"
+    "cors": "^2.8.5"
   }
 }
