@@ -4,55 +4,74 @@ const cookieParser = require("cookie-parser");
 const AuthController = require("./controllers/authController");
 const { validateRegister } = require("./middlewares/validationMiddleware");
 
-const server = http.createServer((req, res) => {
-  res.setHeader("Content-Type", "application/json");
+const parseCookies = (req) => {
+  const cookies = {};
+  const cookieHeader = req.headers.cookie;
+  if (cookieHeader) {
+    cookieHeader.split(";").forEach(cookie => {
+      const [name, value] = cookie.split("=").map(c => c.trim());
+      cookies[name] = decodeURIComponent(value);
+    });
+  }
+  return cookies;
+};
 
-  
-  res.setHeader("Access-Control-Allow-Origin", "http://127.0.0.1:5500"); // Разрешаем фронтенду доступ
-  res.setHeader("Access-Control-Allow-Credentials", "true"); // Разрешаем куки
+const server = http.createServer((req, res) => {
+  // Добавляем CORS заголовки в ответ
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Access-Control-Allow-Origin", "http://127.0.0.1:5500"); // Разрешаем доступ с фронтенда
+  res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-
+  // Обрабатываем preflight-запросы (OPTIONS)
   if (req.method === "OPTIONS") {
     res.writeHead(200);
-    res.end();
-    return;
+    return res.end();
   }
 
-  cookieParser()(req, res, () => {});
-
+  req.cookies = parseCookies(req); // Разбираем куки вручную
   const parsedUrl = url.parse(req.url, true);
   const method = req.method;
-
   console.log(`Запрос: ${req.url} Метод: ${method}`);
-
   let body = "";
 
   req.on("data", chunk => body += chunk);
+
   req.on("end", () => {
-    if (body) {
-      req.body = JSON.parse(body);
+    try {
+      req.body = body ? JSON.parse(body) : {}; // Обрабатываем пустой body
+    } catch (error) {
+      res.writeHead(400);
+      return res.end(JSON.stringify({ error: "Invalid JSON" }));
+    }
 
-      if (parsedUrl.pathname === "/api/auth/signup" && method === "POST") {
-        console.log("Получен запрос для регистрации");
-        validateRegister(req, res, () => {
-          AuthController.register(req, res); // Вызываем контроллер для регистрации
-        });
+    console.log(`Запрос: ${req.url} Метод: ${method}`);
 
-      }
-       else if (parsedUrl.pathname === "/api/auth/login" && method === "POST") {
-        console.log("Получен запрос для логина");
-        AuthController.login(req, res); // Вызываем контроллер для логина
-      } 
-      else if (parsedUrl.pathname === "/api/auth/logout" && method === "POST") {
-        console.log("Получен запрос для логаута");
-        AuthController.logout(req, res); // Вызываем контроллер для логаута
-      } else {
-        res.writeHead(404, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Маршрут не найден" }));
-        console.log("Маршрут не найден для запроса:", parsedUrl.pathname);
-      }
+    // Маршруты
+    if (parsedUrl.pathname === "/api/auth/signup" && method === "POST") {
+      console.log("Получен запрос для регистрации");
+
+      validateRegister(req, res, () => {
+        AuthController.register(req, res);
+      });
+
+    } else if (parsedUrl.pathname === "/api/auth/login" && method === "POST") {
+      console.log("Получен запрос для логина");
+      AuthController.login(req, res);
+
+    } else if (parsedUrl.pathname === "/api/auth/logout" && method === "POST") {
+      console.log("Получен запрос для логаута");
+      AuthController.logout(req, res);
+
+    } else if (parsedUrl.pathname === "/api/auth/status" && method === "GET") {
+      console.log("Запрос на статус");
+      AuthController.getUserDataController(req, res);
+
+    } else {
+      res.writeHead(404);
+      res.end(JSON.stringify({ error: "Маршрут не найден" }));
+      console.log("Маршрут не найден:", parsedUrl.pathname);
     }
   });
 });
