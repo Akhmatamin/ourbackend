@@ -1,8 +1,9 @@
 const pool = require("../database");
+const parseCookies = require("../utils/cookieParser");
 
 const authMiddleware = async (req, res, next) => {
-  // Получаем user_id из куки (если куки вообще передаются)
-  const userId = req.cookies?.user_id;
+  const cookies = parseCookies(req.headers.cookie);
+  const userId = cookies?.user_id;
 
   if (!userId) {
     res.writeHead(401, { "Content-Type": "application/json" });
@@ -10,18 +11,18 @@ const authMiddleware = async (req, res, next) => {
   }
 
   try {
-    const user = await pool.query("SELECT * FROM users WHERE id = $1", [userId]);
+    const result = await pool.query("SELECT * FROM users WHERE id = $1", [userId]);
 
-    if (!user.rows.length) {
+    if (!result.rows.length) {
       res.writeHead(401, { "Content-Type": "application/json" });
       return res.end(JSON.stringify({ error: "Пользователь не найден" }));
     }
 
-    req.user = user.rows[0]; // Добавляем пользователя в req
-    next(); // Передаём управление дальше
+    req.user = result.rows[0];
+    next();
   } catch (error) {
     res.writeHead(500, { "Content-Type": "application/json" });
-    return res.end(JSON.stringify({ error: "Ошибка при проверке авторизации" }));
+    res.end(JSON.stringify({ error: "Ошибка при проверке авторизации" }));
   }
 };
 

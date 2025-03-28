@@ -1,83 +1,93 @@
 const AuthService = require("../services/authService");
-const userService = require("../services/userService"); // Проверь путь!
-
-// Функция для парсинга кук (выносим отдельно)
-function parseCookies(cookieHeader) {
-    return cookieHeader?.split(';').reduce((cookies, cookie) => {
-        const [name, value] = cookie.split('=').map(c => c.trim());
-        cookies[name] = value;
-        return cookies;
-    }, {}) || {};
-}
+const tokenService = require("../services/tokenService");
+const userModel = require("../models/userModel");
+const parseCookies = require("../utils/cookieParser");
 
 const AuthController = {
-  // Регистрация пользователя
+  // ✅ Регистрация
   async register(req, res) {
     try {
       const { username, password } = req.body;
       const user = await AuthService.register(username, password);
+      const { password: _, ...userData } = user;
+
       res.writeHead(201, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ message: "Пользователь зарегистрирован", user }));
+      res.end(JSON.stringify({ message: "Пользователь зарегистрирован", user: userData }));
     } catch (error) {
       res.writeHead(400, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: error.message }));
     }
   },
 
-  // Логин пользователя
+  // ✅ Логин
   async login(req, res) {
     try {
       const { username, password } = req.body;
       const user = await AuthService.login(username, password);
+      const { password: _, ...userData } = user;
 
-      // Устанавливаем куки с ID пользователя
+      const token = await tokenService.generate(user.id); // ← сессионный токен
+
       res.writeHead(200, {
-        "Set-Cookie": `user_id=${user.id}; HttpOnly; Max-Age=86400; Path=/; SameSite=Lax`,
+        "Set-Cookie": `token=${token}; HttpOnly; Max-Age=86400; Path=/; SameSite=Lax`,
         "Content-Type": "application/json",
       });
 
-      res.end(JSON.stringify({ message: "Вход выполнен", user }));
+      res.end(JSON.stringify({ message: "Вход выполнен", user: userData }));
     } catch (error) {
       res.writeHead(400, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: error.message }));
     }
   },
 
-  // Логаут (удаление куки)
-  logout(req, res) {
+  // ✅ Логаут
+  async logout(req, res) {
+    const cookies = parseCookies(req.headers.cookie);
+    const token = cookies?.token;
+
+    if (token) {
+      await tokenService.delete(token); // удаляем токен из БД
+    }
+
     res.writeHead(200, {
-      "Set-Cookie": "user_id=; HttpOnly; Max-Age=0; Path=/; SameSite=Lax", // Удаляем cookie
+      "Set-Cookie": "token=; HttpOnly; Max-Age=0; Path=/; SameSite=Lax",
       "Content-Type": "application/json",
     });
+
     res.end(JSON.stringify({ message: "Вы вышли из системы" }));
   },
 
-  // Получение данных о пользователе
-  async getUserDataController(req, res) {
-    const cookies = parseCookies(req.headers.cookie); // 👈 Парсим куки вручную
-    console.log("Cookies:", cookies); // 👈 Проверяем, есть ли user_id
+  // ✅ Получить текущего пользователя (для фронта)
+  async getCurrentUser(req, res) {
+    const cookies = parseCookies(req.headers.cookie);
+    const token = cookies?.token;
 
-    const userId = cookies.user_id; // Получаем user_id
-
-    if (!userId) {
-        res.writeHead(401, { "Content-Type": "application/json" });
-        return res.end(JSON.stringify({ message: "Пользователь не авторизован" }));
+    if (!token) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ error: "Не авторизован" }));
     }
 
     try {
-        const user = await userService.getUserById(userId);
+      const userId = await tokenService.findUserIdByToken(token);
 
-        if (!user) {
-            res.writeHead(404, { "Content-Type": "application/json" });
-            return res.end(JSON.stringify({ message: "Пользователь не найден" }));
-        }
+      if (!userId) {
+        res.writeHead(401, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ error: "Сессия недействительна" }));
+      }
 
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(user));
+      const user = await userModel.findUserById(userId);
+      if (!user) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ error: "Пользователь не найден" }));
+      }
+
+      const { password: _, ...userData } = user;
+
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ username: userData.username }));
     } catch (error) {
-        console.error(error);
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ message: "Ошибка сервера" }));
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Ошибка сервера" }));
     }
   },
 };

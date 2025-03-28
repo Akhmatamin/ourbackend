@@ -1,35 +1,38 @@
-async function fetchUserData() {
-    try {
-        const response = await fetch("http://localhost:5000/api/auth/status", {
-            method: "GET",
-            credentials: "include", // Чтобы куки передавались
-            headers: { "Content-Type": "application/json" }
+document.addEventListener("DOMContentLoaded", () => {
+    const usernameEl = document.getElementById("username");
+    const logoutBtn = document.getElementById("logout-btn");
+  
+    // Получаем имя пользователя с сервера
+    fetch("http://localhost:5000/api/auth/me", {
+      credentials: "include",
+    })
+      .then(res => {
+        if (!res.ok) throw new Error("Not authorized");
+        return res.json();
+      })
+      .then(data => {
+        usernameEl.textContent = data.username;
+        logoutBtn.style.display = "inline-block"; // показать кнопку logout
+      })
+      .catch(() => {
+        usernameEl.textContent = "Guest";
+        logoutBtn.style.display = "none"; // скрыть logout
+      });
+  
+    // Обработчик выхода
+    logoutBtn.addEventListener("click", () => {
+      fetch("http://localhost:5000/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      })
+        .then(() => {
+          usernameEl.textContent = "Guest";
+          logoutBtn.style.display = "none";
+          window.location.reload(); // обновить страницу после выхода
+        })
+        .catch(() => {
+          alert("Ошибка при выходе");
         });
-
-        if (!response.ok) {
-            throw new Error("Ошибка при получении данных");
-        }
-
-        const user = await response.json();
-        document.getElementById("username").textContent = user.username; // Меняем имя
-        document.getElementById("logout-btn").style.display = "inline-block"; // Показываем кнопку выхода
-    } catch (error) {
-        console.error("Ошибка:", error.message);
-    }
-}
-
-// Вызываем при загрузке страницы
-fetchUserData();
-
-// Логаут
-document.getElementById("logout-btn").addEventListener("click", async () => {
-    try {
-        await fetch("http://localhost:5000/api/auth/logout", {
-            method: "POST",
-            credentials: "include"
-        });
-        location.reload(); // Перезагружаем страницу после выхода
-    } catch (error) {
-        console.error("Ошибка при выходе:", error.message);
-    }
-});
+    });
+  });
+  
